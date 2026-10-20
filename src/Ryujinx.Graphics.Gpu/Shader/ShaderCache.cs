@@ -26,6 +26,11 @@ namespace Ryujinx.Graphics.Gpu.Shader
         /// </summary>
         public const TranslationFlags DefaultFlags = TranslationFlags.DebugMode;
 
+        /// <summary>
+        /// Most programs whose disk cache save is checked each frame, bounding the per-frame cost.
+        /// </summary>
+        private const int MaxProgramsToSaveCheckedPerFrame = 64;
+
         private readonly struct TranslatedShader
         {
             public readonly CachedShaderStage Shader;
@@ -128,23 +133,24 @@ namespace Ryujinx.Graphics.Gpu.Shader
         public void ProcessShaderCacheQueue()
         {
             // Check to see if the binaries for previously compiled shaders are ready, and save them out.
+            // Programs still compiling go to the back of the queue rather than blocking it: with background
+            // compilation a program can stay incomplete for a long time, and waiting on it held back every
+            // program queued after it, so a session could end with almost nothing saved.
 
-            while (_programsToSaveQueue.TryPeek(out ProgramToSave programToSave))
+            int pending = Math.Min(_programsToSaveQueue.Count, MaxProgramsToSaveCheckedPerFrame);
+
+            for (int index = 0; index < pending; index++)
             {
+                ProgramToSave programToSave = _programsToSaveQueue.Dequeue();
                 ProgramLinkStatus result = programToSave.HostProgram.CheckProgramLink(false);
 
-                if (result != ProgramLinkStatus.Incomplete)
+                if (result == ProgramLinkStatus.Incomplete)
                 {
-                    if (result == ProgramLinkStatus.Success)
-                    {
-                        _cacheWriter.AddShader(programToSave.CachedProgram, programToSave.BinaryCode ?? programToSave.HostProgram.GetBinary());
-                    }
-
-                    _programsToSaveQueue.Dequeue();
+                    _programsToSaveQueue.Enqueue(programToSave);
                 }
-                else
+                else if (result == ProgramLinkStatus.Success)
                 {
-                    break;
+                    _cacheWriter.AddShader(programToSave.CachedProgram, programToSave.BinaryCode ?? programToSave.HostProgram.GetBinary());
                 }
             }
         }
@@ -850,6 +856,15 @@ namespace Ryujinx.Graphics.Gpu.Shader
         /// </summary>
         public void Dispose()
         {
+            // Save programs that finished compiling since the last frame, before their host programs go away.
+            while (_cacheWriter != null && _programsToSaveQueue.TryDequeue(out ProgramToSave programToSave))
+            {
+                if (programToSave.HostProgram.CheckProgramLink(false) == ProgramLinkStatus.Success)
+                {
+                    _cacheWriter.AddShader(programToSave.CachedProgram, programToSave.BinaryCode ?? programToSave.HostProgram.GetBinary());
+                }
+            }
+
             foreach (CachedShaderProgram program in _graphicsShaderCache.GetPrograms())
             {
                 program.Dispose();

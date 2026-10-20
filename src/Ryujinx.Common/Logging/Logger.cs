@@ -1,6 +1,7 @@
 using Ryujinx.Common.Logging.Targets;
 using Ryujinx.Common.SystemInterop;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -21,6 +22,29 @@ namespace Ryujinx.Common.Logging
         private static readonly StdErrAdapter _stdErrAdapter;
 
         public static event EventHandler<LogEventArgs> Updated;
+
+        // Some stubs are hit every frame (ServiceMm SetAndWaitOld/GetOld, for example), and logging each
+        // call costs an allocation and a console write. Each stub is printed a few times and then muted.
+        private const int MaxRepeatedStubMessages = 3;
+        private static readonly ConcurrentDictionary<(LogClass, string), StrongBox<int>> _stubCounts = new();
+
+        private static bool ShouldPrintStub(LogClass logClass, string caller, ref string message)
+        {
+            StrongBox<int> counter = _stubCounts.GetOrAdd((logClass, caller), static _ => new StrongBox<int>());
+            int count = Interlocked.Increment(ref counter.Value);
+
+            if (count > MaxRepeatedStubMessages)
+            {
+                return false;
+            }
+
+            if (count == MaxRepeatedStubMessages)
+            {
+                message += " (repeated, further calls will not be logged)";
+            }
+
+            return true;
+        }
 
         public readonly struct Log
         {
@@ -74,7 +98,7 @@ namespace Ryujinx.Common.Logging
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void PrintStub(LogClass logClass, string message = "", [CallerMemberName] string caller = "")
             {
-                if (_enabledClasses[(int)logClass])
+                if (_enabledClasses[(int)logClass] && ShouldPrintStub(logClass, caller, ref message))
                 {
                     Updated?.Invoke(null, new LogEventArgs(Level, _time.Elapsed, Thread.CurrentThread.Name, FormatMessage(logClass, caller, "Stubbed. " + message)));
                 }
@@ -83,16 +107,18 @@ namespace Ryujinx.Common.Logging
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void PrintStub(LogClass logClass, object data, [CallerMemberName] string caller = "")
             {
-                if (_enabledClasses[(int)logClass])
+                string message = string.Empty;
+
+                if (_enabledClasses[(int)logClass] && ShouldPrintStub(logClass, caller, ref message))
                 {
-                    Updated?.Invoke(null, new LogEventArgs(Level, _time.Elapsed, Thread.CurrentThread.Name, FormatMessage(logClass, caller, "Stubbed."), data));
+                    Updated?.Invoke(null, new LogEventArgs(Level, _time.Elapsed, Thread.CurrentThread.Name, FormatMessage(logClass, caller, "Stubbed." + message), data));
                 }
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public void PrintStub(LogClass logClass, string message, object data, [CallerMemberName] string caller = "")
             {
-                if (_enabledClasses[(int)logClass])
+                if (_enabledClasses[(int)logClass] && ShouldPrintStub(logClass, caller, ref message))
                 {
                     Updated?.Invoke(null, new LogEventArgs(Level, _time.Elapsed, Thread.CurrentThread.Name, FormatMessage(logClass, caller, "Stubbed. " + message), data));
                 }

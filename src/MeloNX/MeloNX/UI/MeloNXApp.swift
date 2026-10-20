@@ -29,6 +29,9 @@ func configureAudioSession() {
 var environment: [EnvironmentVariable] = [
     //EnvironmentVariable(string: "MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS", value: "0"),
     EnvironmentVariable(string: "MVK_CONFIG_MAX_ACTIVE_METAL_COMMAND_BUFFERS_PER_QUEUE", value: "32"),
+    // Errors only: MoltenVK otherwise warns on every pipeline built with dynamic topology
+    // ("Metal does not support disabling primitive restart"), flooding the log during play.
+    EnvironmentVariable(string: "MVK_CONFIG_LOG_LEVEL", value: "1"),
    //  EnvironmentVariable(string: "MVK_CONFIG_SHADER_COMPRESSION_ALGORITHM", value: "1"),
 ]
 

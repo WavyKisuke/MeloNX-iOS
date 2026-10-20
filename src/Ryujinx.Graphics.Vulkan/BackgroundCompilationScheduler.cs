@@ -24,7 +24,9 @@ namespace Ryujinx.Graphics.Vulkan
 
         private static int GetBackgroundCompileThreadCount()
         {
-            return Math.Max(1, Math.Min(2, Environment.ProcessorCount / 4));
+            // Leave two cores for the emulated CPU and GPU threads. ProcessorCount / 4 gave six core
+            // iPhones a single worker, so pipelines queued far behind one another during play.
+            return Math.Clamp((Environment.ProcessorCount - 2) / 2, 1, 3);
         }
 
         public Task ScheduleShaderCompile(Action action, bool highPriority = false)

@@ -664,7 +664,7 @@ struct SettingsView: View {
                 
                 NativeToggleRow("Async Shader Compilation (EXPERIMENTAL)", icon: "bolt.horizontal.circle",
                                 isOn: config.enableAsyncShaderCompilation,
-                                info: "Compiles Vulkan shader pipelines in the background to reduce stalls. Newly seen effects may appear after compilation finishes. May break graphics or cause crashes in some games.")
+                                info: "Compiles Vulkan shaders and pipelines on background threads (two on six-core devices) so new effects do not stall the game; they may appear a moment late. Works with Shader Cache, which now keeps what was compiled for the next launch. May still cause graphical glitches or crashes in some games.")
                 .tint(.red)
                 .foregroundStyle(.red)
 
