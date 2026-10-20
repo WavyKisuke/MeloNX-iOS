@@ -129,23 +129,41 @@ jobs:
             ${{ env.DERIVED_DATA_PATH }}/Logs
           if-no-files-found: warn
 
-      - name: Package unsigned IPA
+      # Sideloading tools re-sign with the entitlements they find in the binary, so an IPA built without
+      # signing loses Increased Memory Limit and MeloNX refuses to start games. Ad-hoc signing embeds them.
+      - name: Package ad-hoc signed IPA
         run: |
           set -euo pipefail
           app_path="$DERIVED_DATA_PATH/Build/Products/${XCODE_CONFIGURATION}-iphoneos/MeloNX.app"
           test -d "$app_path"
           test -f "$app_path/Frameworks/Ryujinx.Library.dylib"
           mkdir -p "$IPA_OUTPUT_DIR/Payload"
-          ditto "$app_path" "$IPA_OUTPUT_DIR/Payload/MeloNX.app"
-          ditto src/MeloNX/MeloNX/MeloNX.entitlements "$IPA_OUTPUT_DIR/MeloNX-signing-entitlements.plist"
-          (cd "$IPA_OUTPUT_DIR" && zip -qry MeloNX-unsigned.ipa Payload)
-          du -sh "$IPA_OUTPUT_DIR/MeloNX-unsigned.ipa"
+          app="$IPA_OUTPUT_DIR/Payload/MeloNX.app"
+          ditto "$app_path" "$app"
 
-      - name: Upload unsigned IPA
+          find "$app/Frameworks" -maxdepth 1 \( -name '*.framework' -o -name '*.dylib' \) -print0 |
+            xargs -0 -n 1 codesign --force --sign - --timestamp=none
+          for appex in "$app"/PlugIns/*.appex; do
+            codesign --force --sign - --timestamp=none \
+              --entitlements src/MeloNX/MeloNXRamDonor/MeloNXRamDonor.entitlements "$appex"
+          done
+          codesign --force --sign - --timestamp=none \
+            --entitlements src/MeloNX/MeloNX/MeloNX.entitlements "$app"
+
+          codesign --verify --deep --strict "$app"
+          entitlements="$(codesign -d --entitlements - --xml "$app" 2>/dev/null | plutil -p -)"
+          echo "$entitlements"
+          grep -q 'com.apple.developer.kernel.increased-memory-limit' <<< "$entitlements"
+
+          ditto src/MeloNX/MeloNX/MeloNX.entitlements "$IPA_OUTPUT_DIR/MeloNX-signing-entitlements.plist"
+          (cd "$IPA_OUTPUT_DIR" && zip -qry MeloNX.ipa Payload)
+          du -sh "$IPA_OUTPUT_DIR/MeloNX.ipa"
+
+      - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: MeloNX-unsigned-ipa
+          name: MeloNX-ipa
           path: |
-            ${{ env.IPA_OUTPUT_DIR }}/MeloNX-unsigned.ipa
+            ${{ env.IPA_OUTPUT_DIR }}/MeloNX.ipa
             ${{ env.IPA_OUTPUT_DIR }}/MeloNX-signing-entitlements.plist
           if-no-files-found: error
