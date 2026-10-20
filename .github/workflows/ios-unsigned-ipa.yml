@@ -1,0 +1,142 @@
+name: iOS unsigned IPA
+run-name: iOS unsigned IPA (${{ github.ref_name }})
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - melonx-2.7
+    paths:
+      - ".github/workflows/ios-unsigned-ipa.yml"
+      - "Directory.Packages.props"
+      - "global.json"
+      - "nuget.config"
+      - "src/**"
+      - "tests/**"
+      - "distribution/ios/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-unsigned-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  XCODE_PROJECT: src/MeloNX/MeloNX.xcodeproj
+  XCODE_SCHEME: MeloNX
+  XCODE_CONFIGURATION: Release
+  DERIVED_DATA_PATH: build/DerivedData
+  IPA_OUTPUT_DIR: build/ipa
+  RESULT_BUNDLE_PATH: build/MeloNX.xcresult
+
+jobs:
+  build:
+    name: Build unsigned IPA
+    runs-on: macos-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          set -euo pipefail
+          selected_xcode="$(find /Applications -maxdepth 1 -name 'Xcode*.app' -print | sort -V | tail -n 1)"
+          sudo xcode-select -s "$selected_xcode/Contents/Developer"
+          xcodebuild -version
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      # The LibHac pre-release feed moved; use whichever known feed still serves the pinned version.
+      - name: Select LibHac feed
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/.*Include="Ryujinx.LibHac" Version="\([^"]*\)".*/\1/p' Directory.Packages.props)"
+          for feed in \
+            "https://starforgejo.dev/api/packages/Ryulynx/nuget" \
+            "https://git.ryujinx.app/api/packages/projects/nuget" \
+            "https://git.ryujinx.app/api/packages/ryubing/nuget"
+          do
+            if curl -fsSL -m 30 "$feed/registration/ryujinx.libhac/index.json" | grep -q "\"$version\""; then
+              echo "Using $feed for Ryujinx.LibHac $version"
+              sed -i '' "s#<add key=\"LibHacAlpha\" value=\"[^\"]*\"#<add key=\"LibHacAlpha\" value=\"$feed/index.json\"#" nuget.config
+              exit 0
+            fi
+          done
+          echo "Ryujinx.LibHac $version was not found on any known feed" >&2
+          exit 1
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Check touch regressions
+        run: dotnet run --project tests/MeloNX.Touch.Tests -c Release
+
+      - name: Publish Ryujinx.Library
+        run: |
+          set -euo pipefail
+          dotnet publish -c Release -r ios-arm64 -p:ExtraDefineConstants=DISABLE_UPDATER src/Ryujinx.Library --self-contained true
+          test -f src/Ryujinx.Library/bin/Release/net10.0/ios-arm64/native/Ryujinx.Library.dylib
+
+      - name: Resolve Swift packages
+        run: xcodebuild -project "$XCODE_PROJECT" -scheme "$XCODE_SCHEME" -resolvePackageDependencies
+
+      - name: Build unsigned app
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project "$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME" \
+            -configuration "$XCODE_CONFIGURATION" \
+            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath "$DERIVED_DATA_PATH" \
+            -resultBundlePath "$RESULT_BUNDLE_PATH" \
+            build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            ONLY_ACTIVE_ARCH=NO
+
+      - name: Upload Xcode diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MeloNX-xcode-diagnostics
+          path: |
+            ${{ env.RESULT_BUNDLE_PATH }}
+            ${{ env.DERIVED_DATA_PATH }}/Logs
+          if-no-files-found: warn
+
+      - name: Package unsigned IPA
+        run: |
+          set -euo pipefail
+          app_path="$DERIVED_DATA_PATH/Build/Products/${XCODE_CONFIGURATION}-iphoneos/MeloNX.app"
+          test -d "$app_path"
+          test -f "$app_path/Frameworks/Ryujinx.Library.dylib"
+          mkdir -p "$IPA_OUTPUT_DIR/Payload"
+          ditto "$app_path" "$IPA_OUTPUT_DIR/Payload/MeloNX.app"
+          ditto src/MeloNX/MeloNX/MeloNX.entitlements "$IPA_OUTPUT_DIR/MeloNX-signing-entitlements.plist"
+          (cd "$IPA_OUTPUT_DIR" && zip -qry MeloNX-unsigned.ipa Payload)
+          du -sh "$IPA_OUTPUT_DIR/MeloNX-unsigned.ipa"
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: MeloNX-unsigned-ipa
+          path: |
+            ${{ env.IPA_OUTPUT_DIR }}/MeloNX-unsigned.ipa
+            ${{ env.IPA_OUTPUT_DIR }}/MeloNX-signing-entitlements.plist
+          if-no-files-found: error
