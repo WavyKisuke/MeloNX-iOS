@@ -17,6 +17,10 @@ namespace Ryujinx.Graphics.Vulkan
         private const long MinimumWorkerCacheBudget = 64L * 1024 * 1024;
         private const long InitialBytesPerPipeline = 128 * 1024;
 
+        // A cache is only recycled once it reaches this multiple of its budget. Recycling at the budget
+        // itself threw away a snapshot loaded close to it within a second of starting.
+        private const long RecycleBudgetMultiplier = 2;
+
         private sealed class CacheState
         {
             public PipelineCache Cache;
@@ -28,6 +32,13 @@ namespace Ryujinx.Graphics.Vulkan
             public int SavedPipelineCount;
             public long LastSaveTimestamp;
             public bool Frozen;
+            public bool WarnedOverBudget;
+
+            /// <summary>
+            /// Size of the snapshot on disk. It is not replaced by a smaller one, so a recycled cache
+            /// does not overwrite what it was recycled from until it has grown past it.
+            /// </summary>
+            public long PersistedBytes;
 
             private long _measuredBytes;
             private int _measuredPipelineCount;
@@ -39,6 +50,7 @@ namespace Ryujinx.Graphics.Vulkan
                 Path = path;
                 Description = description;
                 Budget = budget;
+                PersistedBytes = loadedBytes;
                 _measuredBytes = loadedBytes;
             }
 
@@ -309,14 +321,14 @@ namespace Ryujinx.Graphics.Vulkan
 
             if (!force)
             {
+                if (state.PipelineCount - state.SavedPipelineCount < SaveInterval)
+                {
+                    return;
+                }
+
                 if (state.EstimatedBytes < state.Budget)
                 {
                     if (string.IsNullOrEmpty(state.Path))
-                    {
-                        return;
-                    }
-
-                    if (state.PipelineCount - state.SavedPipelineCount < SaveInterval)
                     {
                         return;
                     }
@@ -342,20 +354,30 @@ namespace Ryujinx.Graphics.Vulkan
 
             state.OnMeasured(size);
 
+            if (size > state.Budget * RecycleBudgetMultiplier && allowRecycle)
+            {
+                Recycle(state, size);
+
+                return;
+            }
+
             if (size > state.Budget)
             {
-                if (allowRecycle)
+                if (!state.WarnedOverBudget)
                 {
-                    Recycle(state, size);
-                }
-                else
-                {
+                    state.WarnedOverBudget = true;
+
                     Logger.Info?.PrintMsg(
                         LogClass.Gpu,
                         $"Not persisting the Vulkan {state.Description} pipeline cache at {FormatSize(size)}, " +
                         $"over its {FormatSize(state.Budget)} budget; the previous snapshot stands.");
                 }
 
+                return;
+            }
+
+            if (size < state.PersistedBytes)
+            {
                 return;
             }
 
@@ -385,6 +407,7 @@ namespace Ryujinx.Graphics.Vulkan
             PipelineCache outgrown = state.Cache;
 
             state.OnRecreated(replacement);
+            state.WarnedOverBudget = false;
 
             _api.DestroyPipelineCache(_device, outgrown, null);
 
@@ -571,6 +594,8 @@ namespace Ryujinx.Graphics.Vulkan
                 }
 
                 File.Move(temporaryPath, state.Path, overwrite: true);
+
+                state.PersistedBytes = written;
 
                 string message =
                     $"Vulkan {state.Description} pipeline cache {(final ? "saved" : "checkpointed")}: {FormatSize(written)}.";
