@@ -69,8 +69,17 @@ jobs:
               exit 0
             fi
           done
-          echo "Ryujinx.LibHac $version was not found on any known feed" >&2
-          exit 1
+          # No feed is reachable: build the matching commit ("fix nacp language buffer",
+          # the same change that bumped MeloNX to alpha.129) into a local feed.
+          echo "Building Ryujinx.LibHac $version from source"
+          git clone -q https://starforgejo.dev/archive/LibHac_Ryubing.git "$RUNNER_TEMP/libhac"
+          git -C "$RUNNER_TEMP/libhac" checkout -q "$LIBHAC_COMMIT"
+          (cd "$RUNNER_TEMP/libhac" && ./build.sh Codegen)
+          test -f "$RUNNER_TEMP/libhac/src/LibHac/Common/ResultNameResolver.Generated.cs"
+          dotnet pack "$RUNNER_TEMP/libhac/src/LibHac/LibHac.csproj" -c Release -p:Version="$version" -o "$RUNNER_TEMP/libhac-feed"
+          sed -i '' "s#<add key=\"LibHacAlpha\" value=\"[^\"]*\"#<add key=\"LibHacAlpha\" value=\"$RUNNER_TEMP/libhac-feed\"#" nuget.config
+        env:
+          LIBHAC_COMMIT: 23e402ebb6dedc517e34a98a033078dc0f6fd478
 
       - name: Cache NuGet packages
         uses: actions/cache@v4
