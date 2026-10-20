@@ -104,6 +104,9 @@ jobs:
       - name: Build unsigned app
         run: |
           set -euo pipefail
+          # Number each build (2.7.<run>) so sideloading tools install it as an update and
+          # Settings shows which build is installed.
+          base_version="$(sed -n 's/.*MARKETING_VERSION = \([0-9.]*\);/\1/p' "$XCODE_PROJECT/project.pbxproj" | head -n 1)"
           xcodebuild \
             -project "$XCODE_PROJECT" \
             -scheme "$XCODE_SCHEME" \
@@ -117,7 +120,9 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             DEVELOPMENT_TEAM="" \
-            ONLY_ACTIVE_ARCH=NO
+            ONLY_ACTIVE_ARCH=NO \
+            MARKETING_VERSION="$base_version.$GITHUB_RUN_NUMBER" \
+            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER"
 
       - name: Upload Xcode diagnostics
         if: failure()
