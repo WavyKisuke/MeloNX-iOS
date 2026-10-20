@@ -276,6 +276,22 @@ namespace Ryujinx.Library
             FinalizeWindowRenderer();
         }
 
+        /// <summary>
+        /// Holds the GPU loop between frames. iOS revokes GPU access from a backgrounded app, so
+        /// presenting while the game is paused for the background loses the Vulkan device.
+        /// </summary>
+        public void SetRenderPaused(bool paused)
+        {
+            if (paused)
+            {
+                _pauseEvent.Reset();
+            }
+            else
+            {
+                _pauseEvent.Set();
+            }
+        }
+
         public void Exit()
         {
             TouchScreenManager?.Dispose();
@@ -291,6 +307,7 @@ namespace Ryujinx.Library
 
             _isStopped = true;
             _isActive = false;
+            _pauseEvent.Set();
             _inputUpdatedEvent.Set();
 
             _exitEvent.WaitOne();

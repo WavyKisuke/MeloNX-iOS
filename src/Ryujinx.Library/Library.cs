@@ -204,6 +204,8 @@ namespace Ryujinx.Library
             {
                 _emulationContext.System.TogglePauseEmulation(shouldPause);
             }
+
+            _window?.SetRenderPaused(shouldPause);
         }
 
         [UnmanagedCallersOnly(EntryPoint = "load_keyset")]
