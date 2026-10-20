@@ -668,6 +668,10 @@ struct SettingsView: View {
                 .tint(.red)
                 .foregroundStyle(.red)
 
+                NativeToggleRow("Metal Fast Math", icon: "function",
+                                isOn: nativeSettingsManager.metalFastMath(true).projectedValue,
+                                info: "Lets Metal skip NaN and infinity handling in shaders for speed. Turn OFF if bright light bleeds across the screen (Super Mario Odyssey bloom, for example). Applies to the next game launch.")
+
                 NativeToggleRow("Host Memory Budget Tracking", icon: "memorychip",
                                 isOn: config.enableHostMemoryBudgetTracking,
                                 info: "Sizes the texture and buffer caches from how much memory this app may actually use, and shrinks them when the system asks for memory back. Turn OFF if a game renders a blank or white screen, or loses geometry after a few seconds.")

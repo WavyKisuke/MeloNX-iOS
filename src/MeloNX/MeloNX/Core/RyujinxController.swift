@@ -256,6 +256,8 @@ public final class RyujinxController: ObservableObject {
         if !(nativeSettingsManager.writeStdout.value as Bool) {
             redirectStdIOToFile()
         }
+
+        setenv("MELONX_METAL_FAST_MATH", (nativeSettingsManager.metalFastMath(true).value as Bool) ? "1" : "0", 1)
         
         let expandedRAM = settings.expandRAM
         

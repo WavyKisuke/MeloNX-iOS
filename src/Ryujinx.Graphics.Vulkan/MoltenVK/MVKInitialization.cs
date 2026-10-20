@@ -27,7 +27,10 @@ namespace Ryujinx.Graphics.Vulkan.MoltenVK
 
             // Handled by Environment Variables.
             // config.UseMetalArgumentBuffers = true;
-            config.FastMathEnabled = true;
+            // Fast math lets Metal assume there are no NaNs or infinities. Some post-processing (bloom in
+            // Super Mario Odyssey, for one) produces them and then spreads them across the frame, so the
+            // frontend can turn it off.
+            config.FastMathEnabled = Environment.GetEnvironmentVariable("MELONX_METAL_FAST_MATH") != "0";
 
             config.SemaphoreSupportStyle = MVKVkSemaphoreSupportStyle.MVK_CONFIG_VK_SEMAPHORE_SUPPORT_STYLE_SINGLE_QUEUE;
             config.SynchronousQueueSubmits = false;
