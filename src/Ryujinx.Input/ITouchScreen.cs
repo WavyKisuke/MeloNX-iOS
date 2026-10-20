@@ -17,9 +17,9 @@ namespace Ryujinx.Input
         private const int SwitchPanelHeight = 720;
 
         /// <summary>
-        /// Get the position of touches in the client.
+        /// Get an immutable snapshot of touch IDs and positions in the client.
         /// </summary>
-        Vector2[] GetPositions();
+        ReadOnlyMemory<KeyValuePair<int, Vector2>> GetTouches();
 
         /// <summary>
         /// Get the client size.

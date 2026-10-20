@@ -841,6 +841,9 @@ struct SettingsView: View {
                 NativeToggleRow("Trace Logs", icon: "waveform.path",
                                 isOn: config.loggingEnableTrace,
                                 info: "Prints trace log messages. Does not affect performance.")
+                NativeToggleRow("Error Logs", icon: "xmark.octagon",
+                                isOn: config.loggingEnableError,
+                                info: "Prints error log messages. Keep this on so crashes and failures can be diagnosed.")
                 NativeToggleRow("Write Logs to stdout", icon: "hammer",
                                 isOn: nativeSettingsManager.writeStdout.projectedValue,
                                 info: "Write logs to stdout, disabling the default log file output.")

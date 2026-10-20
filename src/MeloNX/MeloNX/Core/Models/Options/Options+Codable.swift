@@ -128,7 +128,7 @@ extension Options: Codable {
         loggingDisableStub         = try c.decodeIfPresent(Bool.self,   forKey: .loggingDisableStub)       ?? false
         loggingDisableInfo         = try c.decodeIfPresent(Bool.self,   forKey: .loggingDisableInfo)       ?? false
         loggingDisableWarning      = try c.decodeIfPresent(Bool.self,   forKey: .loggingDisableWarning)    ?? false
-        loggingEnableError         = try c.decodeIfPresent(Bool.self,   forKey: .loggingEnableError)       ?? false
+        loggingEnableError         = try c.decodeIfPresent(Bool.self,   forKey: .loggingEnableError)       ?? true
         loggingEnableTrace         = try c.decodeIfPresent(Bool.self,   forKey: .loggingEnableTrace)       ?? false
         loggingDisableGuest        = try c.decodeIfPresent(Bool.self,   forKey: .loggingDisableGuest)      ?? false
         loggingEnableFsAccessLog   = try c.decodeIfPresent(Bool.self,   forKey: .loggingEnableFsAccessLog) ?? false

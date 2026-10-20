@@ -111,6 +111,7 @@ namespace Ryujinx.Input.HLE
                         endPoints.Add(new TouchPoint
                         {
                             Attribute = TouchAttribute.End,
+                            FingerId = (uint)kvp.Key,
                             X = (uint)kvp.Value.X,
                             Y = (uint)kvp.Value.Y,
                             DiameterX = 10,
@@ -126,11 +127,9 @@ namespace Ryujinx.Input.HLE
                 return false;
             }
 
-            Vector2[] positions = touchScreen.GetPositions();
-            Vector2[] screenPositions = ITouchScreen.GetScreenPositionTouch(positions, touchScreen.ClientSize);
+            ReadOnlySpan<KeyValuePair<int, Vector2>> touches = touchScreen.GetTouches().Span;
 
-
-            if (positions.Length == 0)
+            if (touches.Length == 0)
             {
                 if (_previousTouchPositions.Count > 0)
                 {
@@ -140,6 +139,7 @@ namespace Ryujinx.Input.HLE
                         endPoints.Add(new TouchPoint
                         {
                             Attribute = TouchAttribute.End,
+                            FingerId = (uint)kvp.Key,
                             X = (uint)kvp.Value.X,
                             Y = (uint)kvp.Value.Y,
                             DiameterX = 10,
@@ -158,12 +158,13 @@ namespace Ryujinx.Input.HLE
             List<TouchPoint> touchPoints = new();
             HashSet<int> currentTouchIds = new();
 
-            for (int i = 0; i < screenPositions.Length; i++)
+            for (int i = 0; i < touches.Length; i++)
             {
-                Vector2 screenPos = screenPositions[i];
+                int id = touches[i].Key;
+                Vector2 screenPos = ITouchScreen.GetTouchPosition(touches[i].Value, touchScreen.ClientSize);
                 TouchAttribute attribute;
 
-                if (_previousTouchPositions.ContainsKey(i))
+                if (_previousTouchPositions.ContainsKey(id))
                 {
                     attribute = TouchAttribute.None;
                 }
@@ -175,6 +176,7 @@ namespace Ryujinx.Input.HLE
                 touchPoints.Add(new TouchPoint
                 {
                     Attribute = attribute,
+                    FingerId = (uint)id,
                     X = (uint)screenPos.X,
                     Y = (uint)screenPos.Y,
                     DiameterX = 10,
@@ -182,8 +184,8 @@ namespace Ryujinx.Input.HLE
                     Angle = 90,
                 });
 
-                currentTouchIds.Add(i);
-                _previousTouchPositions[i] = screenPos;
+                currentTouchIds.Add(id);
+                _previousTouchPositions[id] = screenPos;
             }
 
             List<int> endedTouches = new();
@@ -195,6 +197,7 @@ namespace Ryujinx.Input.HLE
                     touchPoints.Add(new TouchPoint
                     {
                         Attribute = TouchAttribute.End,
+                        FingerId = (uint)touchId,
                         X = (uint)_previousTouchPositions[touchId].X,
                         Y = (uint)_previousTouchPositions[touchId].Y,
                         DiameterX = 10,
@@ -207,6 +210,14 @@ namespace Ryujinx.Input.HLE
             foreach (var touchId in endedTouches)
             {
                 _previousTouchPositions.Remove(touchId);
+            }
+
+            // A full set of replacement fingers can produce 16 ends and 16 starts.
+            // Keep both transitions without exceeding the guest's per-sample limit.
+            if (touchPoints.Count > TouchStateBuffer.MaxTouches)
+            {
+                _device.Hid.Touchscreen.Update(touchPoints.FindAll(point => point.Attribute == TouchAttribute.End).ToArray());
+                touchPoints.RemoveAll(point => point.Attribute == TouchAttribute.End);
             }
 
             _device.Hid.Touchscreen.Update(touchPoints.ToArray());

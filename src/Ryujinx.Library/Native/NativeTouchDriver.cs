@@ -22,53 +22,42 @@ namespace Ryujinx.Library
         private long _lastCursorMoveTime;
 
         public bool[] PressedButtons { get; }
-        public Vector2[] CurrentPosition => _activeTouches.Values.ToArray();
         public Vector2 Scroll { get; private set; }
         public Size ClientSize;
 
-        private static Dictionary<int, Vector2> _activeTouches = new();
+        private static readonly TouchStateBuffer _touches = new();
+        private static readonly string[] _ids = { "0" };
+
+        public ReadOnlyMemory<KeyValuePair<int, Vector2>> CurrentTouches => _touches.GetSnapshot();
 
         public NativeTouchDriver(HideCursorMode hideCursorMode)
         {
             PressedButtons = new bool[(int)MouseButton.Count];
             _hideCursorMode = hideCursorMode;
+            _touches.Clear();
         }
 
         [UnmanagedCallersOnly(EntryPoint = "touch_began")]
         public static void TouchBeganAtPoint(float x, float y, int index)
         {
-            Vector2 position = new Vector2(x, y);
-            _activeTouches[index] = position;
+            _touches.Begin(index, new Vector2(x, y));
         }
 
 
         [UnmanagedCallersOnly(EntryPoint = "touch_moved")]
         public static void TouchMovedAtPoint(float x, float y, int index)
         {
-            if (_activeTouches.ContainsKey(index))
-            {
-                _activeTouches[index] = new Vector2(x, y);
-            }
+            _touches.Move(index, new Vector2(x, y));
         }
 
         [UnmanagedCallersOnly(EntryPoint = "touch_ended")]
         public static void TouchEndedForIndex(int index)
         {
-            if (_activeTouches.ContainsKey(index))
-            {
-                _activeTouches.Remove(index);
-            }
+            _touches.End(index);
         }
 
         public void UpdatePosition()
         {
-            if (_activeTouches.Count > 0)
-            {
-                var touch = _activeTouches.Values.GetEnumerator();
-                touch.MoveNext(); 
-                Vector2 position = touch.Current;
-            }
-
             CheckIdle();
         }
 
@@ -108,11 +97,7 @@ namespace Ryujinx.Library
 
         public bool IsAnyPressed(MouseButton button)
         {
-            if (_activeTouches.Count > 0)
-            {
-                return true;
-            }
-            return false;
+            return button == MouseButton.Button1 && !CurrentTouches.IsEmpty;
         }
 
         public Size GetClientSize()
@@ -134,7 +119,7 @@ namespace Ryujinx.Library
             remove { }
         }
 
-        public ReadOnlySpan<string> GamepadsIds => new[] { "0" };
+        public ReadOnlySpan<string> GamepadsIds => _ids;
 
         public IGamepad GetGamepad(string id)
         {
@@ -147,6 +132,7 @@ namespace Ryujinx.Library
             {
                 return;
             }
+            _touches.Clear();
             _isDisposed = true;
         }
     }

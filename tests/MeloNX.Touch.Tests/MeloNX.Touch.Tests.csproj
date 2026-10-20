@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/Ryujinx.Input/TouchStateBuffer.cs" Link="TouchStateBuffer.cs" />
+    <Compile Include="../../src/Ryujinx.Input/ITouchScreen.cs" Link="ITouchScreen.cs" />
+    <Compile Include="../../src/Ryujinx.Input/IMouse.cs" Link="IMouse.cs" />
+    <Compile Include="../../src/Ryujinx.Input/MouseStateSnapshot.cs" Link="MouseStateSnapshot.cs" />
+    <Compile Include="../../src/Ryujinx.Input/MouseButton.cs" Link="MouseButton.cs" />
+    <Compile Include="../../src/Ryujinx.Input/HLE/TouchScreenManager.cs" Link="TouchScreenManager.cs" />
+    <Compile Include="../../src/Ryujinx.HLE/HOS/Services/Hid/HidDevices/Types/TouchPoint.cs" Link="TouchPoint.cs" />
+    <Compile Include="../../src/Ryujinx.HLE/HOS/Services/Hid/Types/SharedMemory/TouchScreen/TouchAttribute.cs" Link="TouchAttribute.cs" />
+  </ItemGroup>
+</Project>

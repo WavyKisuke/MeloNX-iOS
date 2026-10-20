@@ -1,6 +1,7 @@
 using Ryujinx.Common.Configuration.Hid;
 using Ryujinx.Input;
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Numerics;
 
@@ -28,9 +29,9 @@ namespace Ryujinx.Library
         }
         
 
-        public Vector2[] GetPositions()
+        public ReadOnlyMemory<KeyValuePair<int, Vector2>> GetTouches()
         {
-            return _driver.CurrentPosition;
+            return _driver.CurrentTouches;
         }
 
         public Vector2 GetScroll()

@@ -8,15 +8,43 @@
 import SwiftUI
 import MetalKit
 
+// IDs belong to a contact's lifetime, rather than its position in an array.
+struct TouchTracker<Contact: Hashable> {
+    static var maxContacts: Int { 16 }
+
+    private var contacts: [Contact: Int] = [:]
+    private var nextID = 0
+
+    mutating func begin(_ contact: Contact) -> Int? {
+        if let id = contacts[contact] { return id }
+        guard contacts.count < Self.maxContacts else { return nil }
+        while contacts.values.contains(nextID) {
+            nextID = nextID == Int(Int32.max) ? 0 : nextID + 1
+        }
+        let id = nextID
+        nextID = nextID == Int(Int32.max) ? 0 : nextID + 1
+        contacts[contact] = id
+        return id
+    }
+
+    func id(for contact: Contact) -> Int? { contacts[contact] }
+
+    mutating func end(_ contact: Contact) -> Int? {
+        contacts.removeValue(forKey: contact)
+    }
+
+    mutating func reset() -> [Int] {
+        let ids = Array(contacts.values)
+        contacts.removeAll(keepingCapacity: true)
+        return ids
+    }
+}
+
 class MetalView: MTKView {
     @ObservedObject var menuViewShower: InGameConfigView_MenuView = .shared
-    private var activeTouches: [UITouch] = []
-    private var ignoredTouches: Set<UITouch> = []
-
-    private var aspectRatio: AspectRatio = .fixed16x9
+    private var activeTouches = TouchTracker<UITouch>()
 
     func setAspectRatio() {
-        self.aspectRatio = RyujinxController.shared.currentSettings.aspectRatio
         Ryujinx.setViewSize(self.bounds)
         updateUnboundedPresentTargetFps()
     }
@@ -27,6 +55,8 @@ class MetalView: MTKView {
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
+        isMultipleTouchEnabled = true
+        if window == nil { resetTouchTracking() }
         updateUnboundedPresentTargetFps()
     }
 
@@ -34,13 +64,9 @@ class MetalView: MTKView {
         super.layoutSubviews()
         updateUnboundedPresentTargetFps()
     }
-    
-    private func transformToTargetCoordinates(_ point: CGPoint) -> CGPoint {
-        return point
-    }
 
-    private func getNextAvailableIndex() -> Int {
-        return activeTouches.endIndex
+    private var touchDisabled: Bool {
+        UserDefaults.standard.bool(forKey: "disableTouch")
     }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -50,48 +76,16 @@ class MetalView: MTKView {
             await self.menuViewShower.triggerButton()
         }
         
-        let disabled = UserDefaults.standard.bool(forKey: "disableTouch")
-        guard !disabled else { return }
+        guard !touchDisabled else {
+            resetTouchTracking()
+            return
+        }
         
         setAspectRatio()
         
         for touch in touches {
-            let location = touch.location(in: self)
-            let index = getNextAvailableIndex()
-            activeTouches.append(touch)
-            print("Touch location: \(location)")
-            let transformed = transformToTargetCoordinates(location)
-            Ryujinx.touchBegan(transformed, index: index)
-        }
-    }
-
-    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        super.touchesEnded(touches, with: event)
-        
-        
-        let disabled = UserDefaults.standard.bool(forKey: "disableTouch")
-        guard !disabled else {
-            for touch in touches {
-                ignoredTouches.remove(touch)
-                if let index = activeTouches.firstIndex(of: touch) {
-                    activeTouches.remove(at: index)
-                }
-            }
-            return
-        }
-        
-        for touch in touches {
-            if ignoredTouches.remove(touch) != nil {
-                continue
-            }
-            
-            if let touchIndex = activeTouches.firstIndex(where: { $0 == touch }) {
-                Ryujinx.touchEnded(index: touchIndex)
-                
-                if let arrayIndex = activeTouches.firstIndex(of: touch) {
-                    activeTouches.remove(at: arrayIndex)
-                }
-            }
+            guard let index = activeTouches.begin(touch) else { continue }
+            Ryujinx.touchBegan(touch.location(in: self), index: index)
         }
     }
 
@@ -102,56 +96,42 @@ class MetalView: MTKView {
             await self.menuViewShower.triggerButton()
         }
         
-        let disabled = UserDefaults.standard.bool(forKey: "disableTouch")
-        guard !disabled else { return }
+        guard !touchDisabled else {
+            resetTouchTracking()
+            return
+        }
         
         setAspectRatio()
         
         for touch in touches {
-            if ignoredTouches.contains(touch), !activeTouches.contains(touch) {
-                continue
-            }
-            
-            
-            guard let touchIndex = activeTouches.firstIndex(where: { $0 == touch }) else {
-                continue
-            }
-            
-            let location = touch.location(in: self)
-            let transformed = transformToTargetCoordinates(location)
-            Ryujinx.touchMoved(transformed, index: touchIndex)
+            guard let index = activeTouches.id(for: touch) else { continue }
+            Ryujinx.touchMoved(touch.location(in: self), index: index)
         }
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        super.touchesEnded(touches, with: event)
+        endTouches(touches)
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         super.touchesCancelled(touches, with: event)
-        let disabled = UserDefaults.standard.bool(forKey: "disableTouch")
-        guard !disabled else {
-            for touch in touches {
-                ignoredTouches.remove(touch)
-                if let index = activeTouches.firstIndex(of: touch) {
-                    activeTouches.remove(at: index)
-                }
-            }
-            return
-        }
-        
+        endTouches(touches)
+    }
+
+    private func endTouches(_ touches: Set<UITouch>) {
+        // Always release contacts, including when touch input was disabled mid-gesture.
         for touch in touches {
-            if ignoredTouches.remove(touch) != nil {
-                continue
-            }
-            
-            if let touchIndex = activeTouches.firstIndex(where: { $0 == touch }) {
-                Ryujinx.touchEnded(index: touchIndex)
-                activeTouches.remove(at: touchIndex)
+            if let index = activeTouches.end(touch) {
+                Ryujinx.touchEnded(index: index)
             }
         }
     }
-    
 
     func resetTouchTracking() {
-        activeTouches.removeAll()
-        ignoredTouches.removeAll()
+        for index in activeTouches.reset() {
+            Ryujinx.touchEnded(index: index)
+        }
     }
 }
 

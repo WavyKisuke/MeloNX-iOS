@@ -188,7 +188,7 @@ struct Options {
     var loggingDisableStub: Bool = false
     var loggingDisableInfo: Bool = false
     var loggingDisableWarning: Bool = false
-    var loggingEnableError: Bool = false
+    var loggingEnableError: Bool = true
     var loggingEnableTrace: Bool = false
     var loggingDisableGuest: Bool = false
     var loggingEnableFsAccessLog: Bool = false
