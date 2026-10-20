@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - melonx-2.7
+      - main
     paths:
       - ".github/workflows/ios-unsigned-ipa.yml"
       - "Directory.Packages.props"
