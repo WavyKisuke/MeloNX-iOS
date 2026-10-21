@@ -772,9 +772,6 @@ struct SettingsView: View {
                 } label: {
                     Label("Edit Layout", systemImage: "formfitting.gamecontroller")
                 }
-                .fullScreenCover(isPresented: $isShowingGameController) {
-                    ControllerView(controller: VirtualControllerManager.shared, isEditing: true, gameId: nil)
-                }
                 
                 SliderRow(
                     "Scale",
@@ -801,6 +798,11 @@ struct SettingsView: View {
                                 isOn: nativeSettingsManager.virtualControllerOffDefault(ProcessInfo.processInfo.isiOSAppOnMac).projectedValue,
                                 info: "Deselects the virtual controller by default, regardless of whether a physical controller is connected.")
             }
+        }
+        // Presented from the form rather than the Edit Layout row: rows are rebuilt when the form updates,
+        // which tore the editor down and closed the Layout Options sheet as soon as it opened.
+        .fullScreenCover(isPresented: $isShowingGameController) {
+            ControllerView(controller: VirtualControllerManager.shared, isEditing: true, gameId: nil)
         }
     }
     
