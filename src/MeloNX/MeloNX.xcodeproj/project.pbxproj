@@ -291,7 +291,7 @@
 			mainGroup = 4ED5D5022F80DD02007DB057;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				4E5FB8F82F9612F6005969EC /* XCRemoteSwiftPackageReference "Melo-Controller" */,
+				4E5FB8F82F9612F6005969EC /* XCLocalSwiftPackageReference "Packages/Melo-Controller" */,
 				4EA652392FBD941E00D6FB52 /* XCRemoteSwiftPackageReference "navigation-stack-backport" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -709,15 +709,14 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		4E5FB8F82F9612F6005969EC /* XCRemoteSwiftPackageReference "Melo-Controller" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/stossy11/Melo-Controller";
-			requirement = {
-				branch = main;
-				kind = branch;
-			};
+/* Begin XCLocalSwiftPackageReference section */
+		4E5FB8F82F9612F6005969EC /* XCLocalSwiftPackageReference "Packages/Melo-Controller" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = "Packages/Melo-Controller";
 		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCRemoteSwiftPackageReference section */
 		4EA652392FBD941E00D6FB52 /* XCRemoteSwiftPackageReference "navigation-stack-backport" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/lm/navigation-stack-backport";
@@ -731,7 +730,7 @@
 /* Begin XCSwiftPackageProductDependency section */
 		4E5FB8F92F9612F7005969EC /* Melo-Controller */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 4E5FB8F82F9612F6005969EC /* XCRemoteSwiftPackageReference "Melo-Controller" */;
+			package = 4E5FB8F82F9612F6005969EC /* XCLocalSwiftPackageReference "Packages/Melo-Controller" */;
 			productName = "Melo-Controller";
 		};
 		4EA6523A2FBD941E00D6FB52 /* NavigationStackBackport */ = {
