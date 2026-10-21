@@ -152,6 +152,7 @@ namespace Ryujinx.Graphics.Vulkan
         private readonly PipelineCacheCreateFlags _createFlags;
         private readonly CacheState _mainState;
         private readonly CacheState[] _workerStates;
+        private readonly object[] _workerLocks;
         private readonly string _cacheDirectory;
 
         private bool _disposed;
@@ -175,6 +176,12 @@ namespace Ryujinx.Graphics.Vulkan
                 ? PipelineCacheCreateFlags.ExternallySynchronizedBitExt
                 : 0;
             _workerStates = new CacheState[workerCount];
+            _workerLocks = new object[workerCount];
+
+            for (int index = 0; index < workerCount; index++)
+            {
+                _workerLocks[index] = new object();
+            }
 
             // Keep each worker at 64 MiB however many there are: a smaller cache is recycled, and its
             // contents lost, that much sooner.
@@ -241,9 +248,33 @@ namespace Ryujinx.Graphics.Vulkan
                 $"Budget {FormatSize(MainCacheBudget)} main, {FormatSize(workerBudget)} per worker.");
         }
 
-        public PipelineCache GetWorkerCache(int workerIndex)
+        /// <summary>
+        /// Builds a pipeline with the worker cache selected by <paramref name="cacheKey"/>. A program always maps
+        /// to the same cache, so it finds what an earlier launch saved there. The caches are externally
+        /// synchronized; if the selected one is busy on another thread, the pipeline is built uncached rather
+        /// than waiting, keeping compile threads parallel at the cost of not persisting that pipeline this time.
+        /// </summary>
+        public void UseWorkerCache(int cacheKey, Action<PipelineCache> action)
         {
-            return _workerStates[workerIndex].Cache;
+            int index = (int)((uint)cacheKey % (uint)_workerStates.Length);
+            object cacheLock = _workerLocks[index];
+
+            if (!Monitor.TryEnter(cacheLock))
+            {
+                action(default);
+
+                return;
+            }
+
+            try
+            {
+                action(_workerStates[index].Cache);
+                NotifyWorkerPipelineCreated(index);
+            }
+            finally
+            {
+                Monitor.Exit(cacheLock);
+            }
         }
 
         public bool IsMainCache(PipelineCache cache)
@@ -252,7 +283,7 @@ namespace Ryujinx.Graphics.Vulkan
         }
 
 
-        public void NotifyWorkerPipelineCreated(int workerIndex)
+        private void NotifyWorkerPipelineCreated(int workerIndex)
         {
             if (_disposed)
             {

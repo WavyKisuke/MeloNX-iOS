@@ -13,7 +13,8 @@ namespace Ryujinx.Graphics.Vulkan
         private readonly PipelineCacheManager _pipelineCacheManager;
 
         public static int PipelineWorkerCount => GetBackgroundCompileThreadCount();
-        public static int PipelineCacheCount => PipelineWorkerCount + 1;
+        // One more cache than compile threads (including the demand thread), so two threads rarely want the same one.
+        public static int PipelineCacheCount => PipelineWorkerCount + 2;
 
         public BackgroundCompilationScheduler(PipelineCacheManager pipelineCacheManager)
         {
@@ -34,19 +35,9 @@ namespace Ryujinx.Graphics.Vulkan
             return _shaderQueue.Schedule(_ => action(), highPriority);
         }
 
-        public Task SchedulePipelineCompile(Action<PipelineCache> action, bool highPriority = false, bool demanded = false)
+        public Task SchedulePipelineCompile(Action<PipelineCache> action, int cacheKey, bool highPriority = false, bool demanded = false)
         {
-            return _pipelineQueue.Schedule(workerIndex =>
-            {
-                try
-                {
-                    action(_pipelineCacheManager.GetWorkerCache(workerIndex));
-                }
-                finally
-                {
-                    _pipelineCacheManager.NotifyWorkerPipelineCreated(workerIndex);
-                }
-            }, highPriority, demanded);
+            return _pipelineQueue.Schedule(_ => _pipelineCacheManager.UseWorkerCache(cacheKey, action), highPriority, demanded);
         }
 
         public void PromoteShaderCompile(Task task)

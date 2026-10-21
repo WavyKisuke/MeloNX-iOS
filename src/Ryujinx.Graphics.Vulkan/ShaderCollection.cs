@@ -76,6 +76,12 @@ namespace Ryujinx.Graphics.Vulkan
         private readonly object _initializeLock;
         private readonly object _pipelineCacheLock;
         private readonly bool _highPriorityBackgroundCompilation;
+
+        /// <summary>
+        /// Hash of the program's SPIR-V. It picks the worker pipeline cache the program's pipelines are built
+        /// with, so the same shaders land in the same cache on every launch and hit its saved snapshot.
+        /// </summary>
+        private readonly int _pipelineCacheKey;
         private bool _disposed;
 
         public ShaderCollection(
@@ -104,6 +110,8 @@ namespace Ryujinx.Graphics.Vulkan
             }
 
             gd.Shaders.Add(this);
+
+            _pipelineCacheKey = ComputePipelineCacheKey(shaders);
 
             Shader[] internalShaders = new Shader[shaders.Length];
 
@@ -703,7 +711,28 @@ namespace Ryujinx.Graphics.Vulkan
 
         private Task RunBackgroundPipelineCompile(Action<PipelineCache> compileAction, bool highPriority, bool demanded = false)
         {
-            return _gd.BackgroundCompilationScheduler.SchedulePipelineCompile(compileAction, highPriority, demanded);
+            return _gd.BackgroundCompilationScheduler.SchedulePipelineCompile(compileAction, _pipelineCacheKey, highPriority, demanded);
+        }
+
+        private static int ComputePipelineCacheKey(ShaderSource[] shaders)
+        {
+            // FNV-1a: it must be the same across launches, which HashCode is not.
+            ulong hash = 14695981039346656037UL;
+
+            foreach (ShaderSource shader in shaders)
+            {
+                if (shader.BinaryCode == null)
+                {
+                    continue;
+                }
+
+                foreach (byte value in shader.BinaryCode)
+                {
+                    hash = (hash ^ value) * 1099511628211UL;
+                }
+            }
+
+            return (int)((hash ^ (hash >> 32)) & int.MaxValue);
         }
 
         private void LogBackgroundPipelineFailure(Exception exception)
