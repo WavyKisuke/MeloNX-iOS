@@ -1664,6 +1664,7 @@ namespace Ryujinx.Graphics.Vulkan
                     !UpdateProgramStagesIfReady(blocking: false))
                 {
                     _renderPassHadSkippedDraw = true;
+                    _program?.NoteSkippedDraw();
                     return false;
                 }
             }
@@ -1790,6 +1791,7 @@ namespace Ryujinx.Graphics.Vulkan
                 if (pbp == PipelineBindPoint.Graphics && canSkipForBackgroundCompile)
                 {
                     _renderPassHadSkippedDraw = true;
+                    _program?.NoteSkippedDraw();
                 }
 
                 return false;
@@ -1822,6 +1824,7 @@ namespace Ryujinx.Graphics.Vulkan
                         if (canSkipForBackgroundCompile &&
                             _program.QueueBackgroundComputePipeline(ref _newState))
                         {
+                            _program.NoteSkippedDraw();
                             return false;
                         }
 
@@ -1838,9 +1841,11 @@ namespace Ryujinx.Graphics.Vulkan
 
                         if (!canSkipForBackgroundCompile)
                         {
+                            // A program forced to draw after skipping too long waits a bounded time for its
+                            // queued compile, then builds the pipeline here, so it cannot hang the GPU thread.
                             _program.TryWaitForBackgroundGraphicsPipeline(
                                 ref key,
-                                Timeout.Infinite,
+                                _program.SkippedTooLong ? ShaderCollection.SkippedTooLongWaitMs : Timeout.Infinite,
                                 out pipeline);
                         }
 
@@ -1866,6 +1871,7 @@ namespace Ryujinx.Graphics.Vulkan
                             if (!waitForBackgroundGraphicsPipeline)
                             {
                                 _renderPassHadSkippedDraw = true;
+                                _program?.NoteSkippedDraw();
                                 return false;
                             }
 
@@ -1908,6 +1914,8 @@ namespace Ryujinx.Graphics.Vulkan
                 }
             }
 
+            _program.NoteDrawn();
+
             return true;
         }
 
@@ -1917,6 +1925,7 @@ namespace Ryujinx.Graphics.Vulkan
                 _program != null &&
                 _program.CompilesInBackground &&
                 _program.AllowAsyncCompileSkip &&
+                !_program.SkippedTooLong &&
                 !_tfEnabled &&
                 !_newState.RasterizerDiscardEnable;
         }

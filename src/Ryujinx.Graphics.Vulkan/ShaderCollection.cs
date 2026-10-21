@@ -2,6 +2,7 @@ using Ryujinx.Common.Logging;
 using Ryujinx.Graphics.GAL;
 using Silk.NET.Vulkan;
 using System;
+using System.Diagnostics;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -82,6 +83,60 @@ namespace Ryujinx.Graphics.Vulkan
         /// with, so the same shaders land in the same cache on every launch and hit its saved snapshot.
         /// </summary>
         private readonly int _pipelineCacheKey;
+
+        /// <summary>
+        /// How long a program's draws may keep being skipped while its pipelines compile before it waits for them
+        /// instead. Some draws (the track in a new Mario Kart 8 course, terrain in Super Mario Odyssey) otherwise
+        /// stayed invisible for minutes. Accessed on the GPU thread only.
+        /// </summary>
+        private const long MaxSkippedDrawMs = 1000;
+        public const int SkippedTooLongWaitMs = 2000;
+
+        private long _firstSkippedDrawTimestamp;
+
+        private const int MaxSkippedTooLongReports = 10;
+        private static int _skippedTooLongReports;
+        private bool _reportedSkippedTooLong;
+
+        public bool SkippedTooLong
+        {
+            get
+            {
+                if (_firstSkippedDrawTimestamp == 0 ||
+                    Stopwatch.GetElapsedTime(_firstSkippedDrawTimestamp).TotalMilliseconds < MaxSkippedDrawMs)
+                {
+                    return false;
+                }
+
+                if (!_reportedSkippedTooLong)
+                {
+                    _reportedSkippedTooLong = true;
+
+                    if (Interlocked.Increment(ref _skippedTooLongReports) <= MaxSkippedTooLongReports)
+                    {
+                        Logger.Info?.PrintMsg(
+                            LogClass.Gpu,
+                            $"Draws skipped for over {MaxSkippedDrawMs} ms while compiling in the background; " +
+                            $"waiting for the pipelines instead (shader key {_pipelineCacheKey:X8}).");
+                    }
+                }
+
+                return true;
+            }
+        }
+
+        public void NoteSkippedDraw()
+        {
+            if (_firstSkippedDrawTimestamp == 0)
+            {
+                _firstSkippedDrawTimestamp = Stopwatch.GetTimestamp();
+            }
+        }
+
+        public void NoteDrawn()
+        {
+            _firstSkippedDrawTimestamp = 0;
+        }
         private bool _disposed;
 
         public ShaderCollection(
