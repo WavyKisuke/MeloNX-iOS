@@ -12,7 +12,9 @@ import UIKit
 
 extension BaseController {
     func setupMotion() {
-        if let nativeController, nativeController.motion != nil, !self.usesDeviceHandlers {
+        NSLog("Motion for %@ comes from the %@.", name, usesDeviceMotion ? "phone" : "controller")
+
+        if let nativeController, nativeController.motion != nil, !self.usesDeviceMotion {
             guard ControllerMappingStore.shared.mapping(for: self).motionEnabled else {
                 nativeController.motion?.valueChangedHandler = nil
                 nativeController.motion?.sensorsActive = false

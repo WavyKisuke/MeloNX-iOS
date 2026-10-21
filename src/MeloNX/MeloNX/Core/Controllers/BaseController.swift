@@ -61,6 +61,21 @@ class BaseController: Equatable, Identifiable {
     }
     
     
+    /// Whether motion comes from the phone rather than the controller. A Joy-Con pair used to be sent here
+    /// by name, so shaking the Joy-Cons did nothing; it now uses its own sensors whenever iOS exposes them.
+    /// Controllers clipped onto the phone (Backbone) move with it, so the phone's sensors are theirs.
+    var usesDeviceMotion: Bool {
+        if virtual { return true }
+
+        let lowercasedName = name.lowercased()
+
+        if lowercasedName.hasSuffix("backbone") || lowercasedName == "backbone one" {
+            return true
+        }
+
+        return nativeController?.motion == nil
+    }
+
     init(nativeController: GCController?, virtual: Bool? = nil) {
         self.nativeController = nativeController
         self.virtual = virtual ?? (nativeController == nil)
