@@ -1,0 +1,75 @@
+name: Publish iOS release
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful iOS unsigned IPA workflow run ID
+        required: true
+      tag:
+        description: Release tag matching the IPA version (for example v2.7.15)
+        required: true
+permissions:
+  actions: read
+  contents: write
+concurrency:
+  group: publish-ios-release
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate source build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.run_id }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" > "$RUNNER_TEMP/source-run.json"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          run = json.loads(Path(os.environ['RUNNER_TEMP'], 'source-run.json').read_text())
+          assert run['conclusion'] == 'success'
+          assert run['path'] == '.github/workflows/ios-unsigned-ipa.yml'
+          assert run['head_repository']['full_name'] == os.environ['GITHUB_REPOSITORY']
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write('RELEASE_SHA=' + run['head_sha'] + '\n')
+          PY
+      - uses: actions/download-artifact@v4
+        with:
+          name: MeloNX-ipa
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+          path: release
+      - name: Verify IPA and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, plistlib, zipfile
+          with zipfile.ZipFile('release/MeloNX.ipa') as z:
+              assert z.testzip() is None
+              app = plistlib.loads(z.read('Payload/MeloNX.app/Info.plist'))
+              assert os.environ['RELEASE_TAG'] == 'v' + app['CFBundleShortVersionString']
+              assert app['CFBundleIdentifier'] == 'com.flyingsquirrel0419.MeloNX'
+              extensions = [n for n in z.namelist() if n.startswith('Payload/MeloNX.app/PlugIns/') and n.endswith('.appex/Info.plist')]
+              assert extensions
+              for n in extensions:
+                  assert plistlib.loads(z.read(n))['CFBundleIdentifier'] == app['CFBundleIdentifier'] + '.RamDonor'
+          PY
+          (cd release && sha256sum MeloNX.ipa MeloNX-signing-entitlements.plist > SHA256SUMS.txt)
+          cat > "$RUNNER_TEMP/release-notes.md" <<'NOTES'
+          iOS bundle identifier changed to `com.flyingsquirrel0419.MeloNX`.
+
+          - App: `com.flyingsquirrel0419.MeloNX`
+          - RamDonor extension: `com.flyingsquirrel0419.MeloNX.RamDonor`
+          - Includes an ad-hoc signed IPA for sideloading, signing entitlements, and SHA-256 checksums.
+
+          The changed bundle identifier installs as a separate app from builds using `com.stossy11.MeloNX`; existing app data is not migrated automatically.
+          NOTES
+          gh release create "$RELEASE_TAG" release/MeloNX.ipa release/MeloNX-signing-entitlements.plist release/SHA256SUMS.txt \
+            --target "$RELEASE_SHA" --title "MeloNX ${RELEASE_TAG#v}" \
+            --notes-file "$RUNNER_TEMP/release-notes.md" --latest
