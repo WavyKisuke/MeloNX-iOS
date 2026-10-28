@@ -12,7 +12,7 @@
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string>com.stossy11.MeloNX</string>
+			<string>com.flyingsquirrel0419.MeloNX</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>melonx</string>
@@ -22,7 +22,7 @@
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string>com.stossy11.MeloNX-code</string>
+			<string>com.flyingsquirrel0419.MeloNX-code</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>atariemulator</string>
