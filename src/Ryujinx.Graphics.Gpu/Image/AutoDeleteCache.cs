@@ -45,14 +45,17 @@ namespace Ryujinx.Graphics.Gpu.Image
         private const ulong MinTextureSizeCapacity = 512 * 1024 * 1024;
         private const ulong DefaultTextureSizeCapacity = 1 * GiB;
         private const ulong MinUnifiedTextureSizeCapacity = 256 * MiB;
-        private const ulong MaxUnifiedTextureSizeCapacity = 768 * MiB;
+        private const ulong MaxUnifiedTextureSizeCapacity = 1536 * MiB;
         private const ulong TextureSizeCapacity6GiB = 4 * GiB;
         private const ulong TextureSizeCapacity8GiB = 6 * GiB;
         private const ulong TextureSizeCapacity12GiB = 12 * GiB;
 
+        // Keep a larger stable working set on Apple unified memory when extra host memory is available.
+        // Allow some headroom before eviction to avoid repeatedly evicting and recreating textures at the boundary.
+        private const double CacheEvictionHysteresis = 1.25d;
         private const float MemoryScaleFactor = 0.50f;
         private const int UnifiedMemoryDivisor = 16;
-        private const int ConstrainedMemoryDivisor = 8;
+        private const int ConstrainedMemoryDivisor = 4;
         private ulong _maxCacheMemoryUsage = DefaultTextureSizeCapacity;
 
         private readonly LinkedList<Texture> _textures;
@@ -182,8 +185,12 @@ namespace Ryujinx.Graphics.Gpu.Image
 
         private void EnforceCapacity()
         {
+            ulong evictionThreshold = (ulong)Math.Min(
+                ulong.MaxValue,
+                _maxCacheMemoryUsage * CacheEvictionHysteresis);
+
             while (_textures.Count > MaxCapacity ||
-                   (_totalSize > _maxCacheMemoryUsage && _textures.Count >= MinCountForDeletion))
+                   (_totalSize > evictionThreshold && _textures.Count >= MinCountForDeletion))
             {
                 RemoveLeastUsedTexture();
             }
