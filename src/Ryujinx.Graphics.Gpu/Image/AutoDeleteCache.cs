@@ -34,6 +34,7 @@ namespace Ryujinx.Graphics.Gpu.Image
 
     class AutoDeleteCache : IEnumerable<Texture>
     {
+        private const int MinCountForDeletion = 32;
         private const int MaxCapacity = 2048;
         private const ulong MiB = 1024 * 1024;
         private const ulong GiB = 1024 * 1024 * 1024;
@@ -182,7 +183,7 @@ namespace Ryujinx.Graphics.Gpu.Image
         private void EnforceCapacity()
         {
             while (_textures.Count > MaxCapacity ||
-                   (_totalSize > _maxCacheMemoryUsage && _textures.Count > 0))
+                   (_totalSize > _maxCacheMemoryUsage && _textures.Count >= MinCountForDeletion))
             {
                 RemoveLeastUsedTexture();
             }
@@ -287,8 +288,6 @@ namespace Ryujinx.Graphics.Gpu.Image
 
         public void AddShortCache(Texture texture)
         {
-            // A texture should only get a new short-cache entry when it does not
-            // already have one. This prevents duplicate reference-count ownership.
             if (texture.ShortCacheEntry == null)
             {
                 ShortTextureCacheEntry entry = new(texture);
