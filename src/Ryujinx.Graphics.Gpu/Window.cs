@@ -186,10 +186,18 @@ namespace Ryujinx.Graphics.Gpu
 
             if (!_unboundedPresentMode)
             {
-                while (ConsumeFrameAvailable())
+                // Present at most one frame per loop iteration. If the producer has
+                // already queued newer work, drop the surplus instead of performing
+                // multiple host presents back-to-back.
+                if (ConsumeFrameAvailable())
                 {
                     Present(swapBuffersCallback);
                     presented = true;
+
+                    while (ConsumeFrameAvailable())
+                    {
+                        DropFrame();
+                    }
                 }
 
                 return presented;
