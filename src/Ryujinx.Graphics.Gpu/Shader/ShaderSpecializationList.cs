@@ -9,6 +9,8 @@ namespace Ryujinx.Graphics.Gpu.Shader
     class ShaderSpecializationList : IEnumerable<CachedShaderProgram>
     {
         private readonly List<CachedShaderProgram> _entries = [];
+        private CachedShaderProgram _lastGraphicsMatch;
+        private CachedShaderProgram _lastComputeMatch;
 
         /// <summary>
         /// Adds a program to the list.
@@ -33,19 +35,24 @@ namespace Ryujinx.Graphics.Gpu.Shader
             ref GpuChannelGraphicsState graphicsState,
             out CachedShaderProgram program)
         {
+            CachedShaderProgram lastMatch = _lastGraphicsMatch;
+
+            if (lastMatch != null && MatchesGraphics(lastMatch, channel, ref poolState, ref graphicsState))
+            {
+                program = lastMatch;
+                return true;
+            }
+
             foreach (CachedShaderProgram entry in _entries)
             {
-                bool vertexAsCompute = entry.VertexAsCompute != null;
-                bool usesDrawParameters = entry.Shaders[1]?.Info.UsesDrawParameters ?? false;
-
-                if (entry.SpecializationState.MatchesGraphics(
-                    channel,
-                    ref poolState,
-                    ref graphicsState,
-                    vertexAsCompute,
-                    usesDrawParameters,
-                    checkTextures: true))
+                if (entry == lastMatch)
                 {
+                    continue;
+                }
+
+                if (MatchesGraphics(entry, channel, ref poolState, ref graphicsState))
+                {
+                    _lastGraphicsMatch = entry;
                     program = entry;
                     return true;
                 }
@@ -59,16 +66,34 @@ namespace Ryujinx.Graphics.Gpu.Shader
         /// Tries to find an existing compute program on the cache.
         /// </summary>
         /// <param name="channel">GPU channel</param>
-        /// <param name="poolState">Texture pool state</param>
+        /// <param name="poolState">GPU channel state</param>
         /// <param name="computeState">Compute state</param>
         /// <param name="program">Cached program, if found</param>
         /// <returns>True if a compatible program is found, false otherwise</returns>
-        public bool TryFindForCompute(GpuChannel channel, GpuChannelPoolState poolState, GpuChannelComputeState computeState, out CachedShaderProgram program)
+        public bool TryFindForCompute(
+            GpuChannel channel,
+            GpuChannelPoolState poolState,
+            GpuChannelComputeState computeState,
+            out CachedShaderProgram program)
         {
+            CachedShaderProgram lastMatch = _lastComputeMatch;
+
+            if (lastMatch != null && lastMatch.SpecializationState.MatchesCompute(channel, ref poolState, computeState, true))
+            {
+                program = lastMatch;
+                return true;
+            }
+
             foreach (CachedShaderProgram entry in _entries)
             {
+                if (entry == lastMatch)
+                {
+                    continue;
+                }
+
                 if (entry.SpecializationState.MatchesCompute(channel, ref poolState, computeState, true))
                 {
+                    _lastComputeMatch = entry;
                     program = entry;
                     return true;
                 }
@@ -76,6 +101,24 @@ namespace Ryujinx.Graphics.Gpu.Shader
 
             program = default;
             return false;
+        }
+
+        private static bool MatchesGraphics(
+            CachedShaderProgram entry,
+            GpuChannel channel,
+            ref GpuChannelPoolState poolState,
+            ref GpuChannelGraphicsState graphicsState)
+        {
+            bool vertexAsCompute = entry.VertexAsCompute != null;
+            bool usesDrawParameters = entry.Shaders[1]?.Info.UsesDrawParameters ?? false;
+
+            return entry.SpecializationState.MatchesGraphics(
+                channel,
+                ref poolState,
+                ref graphicsState,
+                vertexAsCompute,
+                usesDrawParameters,
+                checkTextures: true);
         }
 
         public IEnumerator<CachedShaderProgram> GetEnumerator()
