@@ -45,14 +45,16 @@ namespace Ryujinx.Graphics.Gpu.Image
         private const ulong MinTextureSizeCapacity = 512 * 1024 * 1024;
         private const ulong DefaultTextureSizeCapacity = 1 * GiB;
         private const ulong MinUnifiedTextureSizeCapacity = 256 * MiB;
-        private const ulong MaxUnifiedTextureSizeCapacity = 1536 * MiB;
+        private const ulong MaxUnifiedTextureSizeCapacity = 1024 * MiB;
         private const ulong TextureSizeCapacity6GiB = 4 * GiB;
         private const ulong TextureSizeCapacity8GiB = 6 * GiB;
         private const ulong TextureSizeCapacity12GiB = 12 * GiB;
 
-        // Keep a larger stable working set on Apple unified memory when extra host memory is available.
-        // Allow some headroom before eviction to avoid repeatedly evicting and recreating textures at the boundary.
-        private const double CacheEvictionHysteresis = 1.25d;
+        // Keep a stable working set on Apple unified memory without allowing the texture cache
+        // to grow so far that it competes with the guest, renderer, and frame buffers.
+        // A smaller hysteresis window reduces the peak working-set overshoot while still avoiding
+        // eviction/recreation on every small cache-size fluctuation.
+        private const double CacheEvictionHysteresis = 1.10d;
         private const float MemoryScaleFactor = 0.50f;
         private const int UnifiedMemoryDivisor = 16;
         private const int ConstrainedMemoryDivisor = 4;
@@ -208,7 +210,7 @@ namespace Ryujinx.Graphics.Gpu.Image
             ulong target = level switch
             {
                 MemoryPressureLevel.Critical => _totalSize / 2,
-                MemoryPressureLevel.Warning => _totalSize - (_totalSize / 4),
+                MemoryPressureLevel.Warning => _totalSize - (_totalSize / 10),
                 _ => _maxCacheMemoryUsage,
             };
 
