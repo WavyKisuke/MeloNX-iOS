@@ -25,6 +25,13 @@ namespace Ryujinx.Graphics.Vulkan
 
         private static int GetBackgroundCompileThreadCount()
         {
+            // Keep iOS background compilation conservative so shader/pipeline work does not compete
+            // with the emulated CPU and Vulkan submission threads on mobile CPUs.
+            if (OperatingSystem.IsIOS())
+            {
+                return 1;
+            }
+
             // Leave two cores for the emulated CPU and GPU threads. ProcessorCount / 4 gave six core
             // iPhones a single worker, so pipelines queued far behind one another during play.
             return Math.Clamp((Environment.ProcessorCount - 2) / 2, 1, 3);
@@ -118,7 +125,6 @@ namespace Ryujinx.Graphics.Vulkan
                     };
                 }
 
-                
                 _threads[workerCount] = new Thread(() => WorkerLoop(workerCount, demandOnly: true))
                 {
                     IsBackground = true,
