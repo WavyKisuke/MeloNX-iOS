@@ -45,19 +45,14 @@ namespace Ryujinx.Graphics.Gpu.Image
         private const ulong MinTextureSizeCapacity = 512 * 1024 * 1024;
         private const ulong DefaultTextureSizeCapacity = 1 * GiB;
         private const ulong MinUnifiedTextureSizeCapacity = 256 * MiB;
-        private const ulong MaxUnifiedTextureSizeCapacity = 1024 * MiB;
+        private const ulong MaxUnifiedTextureSizeCapacity = 768 * MiB;
         private const ulong TextureSizeCapacity6GiB = 4 * GiB;
         private const ulong TextureSizeCapacity8GiB = 6 * GiB;
         private const ulong TextureSizeCapacity12GiB = 12 * GiB;
 
-        // Keep a stable working set on Apple unified memory without allowing the texture cache
-        // to grow so far that it competes with the guest, renderer, and frame buffers.
-        // A smaller hysteresis window reduces the peak working-set overshoot while still avoiding
-        // eviction/recreation on every small cache-size fluctuation.
-        private const double CacheEvictionHysteresis = 1.10d;
         private const float MemoryScaleFactor = 0.50f;
         private const int UnifiedMemoryDivisor = 16;
-        private const int ConstrainedMemoryDivisor = 4;
+        private const int ConstrainedMemoryDivisor = 8;
         private ulong _maxCacheMemoryUsage = DefaultTextureSizeCapacity;
 
         private readonly LinkedList<Texture> _textures;
@@ -187,12 +182,8 @@ namespace Ryujinx.Graphics.Gpu.Image
 
         private void EnforceCapacity()
         {
-            ulong evictionThreshold = (ulong)Math.Min(
-                ulong.MaxValue,
-                _maxCacheMemoryUsage * CacheEvictionHysteresis);
-
             while (_textures.Count > MaxCapacity ||
-                   (_totalSize > evictionThreshold && _textures.Count >= MinCountForDeletion))
+                   (_totalSize > _maxCacheMemoryUsage && _textures.Count >= MinCountForDeletion))
             {
                 RemoveLeastUsedTexture();
             }
@@ -210,7 +201,7 @@ namespace Ryujinx.Graphics.Gpu.Image
             ulong target = level switch
             {
                 MemoryPressureLevel.Critical => _totalSize / 2,
-                MemoryPressureLevel.Warning => _totalSize - (_totalSize / 10),
+                MemoryPressureLevel.Warning => _totalSize - (_totalSize / 4),
                 _ => _maxCacheMemoryUsage,
             };
 
