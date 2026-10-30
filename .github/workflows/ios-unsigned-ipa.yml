@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - main
+      - lemonx-memory-next
     paths:
       - ".github/workflows/ios-unsigned-ipa.yml"
       - "Directory.Packages.props"
@@ -34,7 +35,6 @@ env:
 jobs:
   build:
     name: Build unsigned IPA
-    # MeloNX 2.7 uses iOS 27 SDK APIs and Swift features that need Xcode 27.
     runs-on: xcode-27
     timeout-minutes: 120
 
@@ -53,7 +53,6 @@ jobs:
         with:
           global-json-file: global.json
 
-      # The LibHac pre-release feed moved; use whichever known feed still serves the pinned version.
       - name: Select LibHac feed
         run: |
           set -euo pipefail
@@ -69,8 +68,6 @@ jobs:
               exit 0
             fi
           done
-          # No feed is reachable: build the matching commit ("fix nacp language buffer",
-          # the same change that bumped MeloNX to alpha.129) into a local feed.
           echo "Building Ryujinx.LibHac $version from source"
           git clone -q https://starforgejo.dev/archive/LibHac_Ryubing.git "$RUNNER_TEMP/libhac"
           git -C "$RUNNER_TEMP/libhac" checkout -q "$LIBHAC_COMMIT"
@@ -104,8 +101,6 @@ jobs:
       - name: Build unsigned app
         run: |
           set -euo pipefail
-          # Number each build (2.7.<run>) so sideloading tools install it as an update and
-          # Settings shows which build is installed.
           base_version="$(sed -n 's/.*MARKETING_VERSION = \([0-9.]*\);/\1/p' "$XCODE_PROJECT/project.pbxproj" | head -n 1)"
           xcodebuild \
             -project "$XCODE_PROJECT" \
@@ -134,8 +129,6 @@ jobs:
             ${{ env.DERIVED_DATA_PATH }}/Logs
           if-no-files-found: warn
 
-      # Sideloading tools re-sign with the entitlements they find in the binary, so an IPA built without
-      # signing loses Increased Memory Limit and MeloNX refuses to start games. Ad-hoc signing embeds them.
       - name: Package ad-hoc signed IPA
         run: |
           set -euo pipefail
