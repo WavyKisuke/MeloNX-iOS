@@ -20,7 +20,9 @@ namespace Ryujinx.Graphics.Vulkan
         private readonly static long _fastFlushExitThreshold = Stopwatch.Frequency / 10000; // (0.1ms)
 
         // Number of frames to average waiting times over.
-        private const int SyncWaitAverageCount = 20;
+        // Use a longer window so a short synchronization spike doesn't immediately
+        // change the command flushing strategy and create another frame-time spike.
+        private const int SyncWaitAverageCount = 30;
 
         private const int MinDrawCountForFlush = 10;
         private const int MinConsecutiveQueryForFlush = 10;
