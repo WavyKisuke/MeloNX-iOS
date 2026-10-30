@@ -7,17 +7,17 @@ namespace Ryujinx.Graphics.Vulkan
 {
     internal class AutoFlushCounter
     {
-        // How often to flush on framebuffer change.
-        private readonly static long _framebufferFlushTimer = Stopwatch.Frequency / 1000; // (1ms)
+        // Mobile GPUs benefit from fewer command-buffer submissions during steady gameplay.
+        private readonly static long _framebufferFlushTimer = Stopwatch.Frequency / 500; // (2ms)
 
-        // How often to flush on draw when fast flush mode is enabled.
-        private readonly static long _drawFlushTimer = Stopwatch.Frequency / 666; // (1.5ms)
+        // Avoid fragmenting long render work unless synchronization pressure is sustained.
+        private readonly static long _drawFlushTimer = Stopwatch.Frequency / 333; // (3ms)
 
-        // Average wait time that triggers fast flush mode to be entered.
-        private readonly static long _fastFlushEnterThreshold = Stopwatch.Frequency / 666; // (1.5ms)
+        // Require a larger average sync wait before enabling fast flush mode.
+        private readonly static long _fastFlushEnterThreshold = Stopwatch.Frequency / 333; // (3ms)
 
-        // Average wait time that triggers fast flush mode to be exited.
-        private readonly static long _fastFlushExitThreshold = Stopwatch.Frequency / 10000; // (0.1ms)
+        // Leave fast flush mode once synchronization is comfortably low.
+        private readonly static long _fastFlushExitThreshold = Stopwatch.Frequency / 4000; // (0.25ms)
 
         // Number of frames to average waiting times over.
         private const int SyncWaitAverageCount = 20;
