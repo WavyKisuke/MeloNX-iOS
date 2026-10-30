@@ -19,10 +19,11 @@ namespace Ryujinx.Graphics.Vulkan
         // Average wait time that triggers fast flush mode to be exited.
         private readonly static long _fastFlushExitThreshold = Stopwatch.Frequency / 10000; // (0.1ms)
 
-        // Number of frames to average waiting times over.
-        // Use a longer window so a short synchronization spike doesn't immediately
-        // change the command flushing strategy and create another frame-time spike.
-        private const int SyncWaitAverageCount = 30;
+        // Keep a long history for stable exit behavior, but use a shorter window
+        // to enter fast flush mode so sustained GPU stalls are addressed sooner.
+        private const int SyncWaitHistoryCount = 30;
+        private const int FastFlushEnterAverageCount = 8;
+        private const int FastFlushExitAverageCount = 30;
 
         private const int MinDrawCountForFlush = 10;
         private const int MinConsecutiveQueryForFlush = 10;
@@ -40,7 +41,7 @@ namespace Ryujinx.Graphics.Vulkan
         private int _queryCountHistoryIndex;
         private int _remainingQueries;
 
-        private readonly long[] _syncWaitHistory = new long[SyncWaitAverageCount];
+        private readonly long[] _syncWaitHistory = new long[SyncWaitHistoryCount];
         private int _syncWaitHistoryIndex;
 
         private bool _fastFlushMode;
@@ -153,6 +154,20 @@ namespace Ryujinx.Graphics.Vulkan
             return now > _lastFlush + flushTimeout;
         }
 
+        private long GetAverageWait(int sampleCount)
+        {
+            long total = 0;
+            int count = Math.Min(sampleCount, SyncWaitHistoryCount);
+
+            for (int i = 0; i < count; i++)
+            {
+                int index = (_syncWaitHistoryIndex - 1 - i + SyncWaitHistoryCount) % SyncWaitHistoryCount;
+                total += _syncWaitHistory[index];
+            }
+
+            return count == 0 ? 0 : total / count;
+        }
+
         public void Present()
         {
             // Query flush prediction.
@@ -167,9 +182,9 @@ namespace Ryujinx.Graphics.Vulkan
 
             _syncWaitHistory[_syncWaitHistoryIndex] = _gd.SyncManager.GetAndResetWaitTicks();
 
-            _syncWaitHistoryIndex = (_syncWaitHistoryIndex + 1) % SyncWaitAverageCount;
+            _syncWaitHistoryIndex = (_syncWaitHistoryIndex + 1) % SyncWaitHistoryCount;
 
-            long averageWait = (long)_syncWaitHistory.Average();
+            long averageWait = GetAverageWait(_fastFlushMode ? FastFlushExitAverageCount : FastFlushEnterAverageCount);
 
             if (_fastFlushMode ? averageWait < _fastFlushExitThreshold : averageWait > _fastFlushEnterThreshold)
             {
