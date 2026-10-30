@@ -187,6 +187,12 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
                 case ReportCounterType.TransformFeedbackPrimitivesWritten:
                     counter = _context.Renderer.ReportCounter(CounterType.TransformFeedbackPrimitivesWritten, resultHandler, 1f, false);
                     break;
+                default:
+                    // Real hardware writes a result for every report type. Returning zero
+                    // prevents guest code from busy-polling report memory forever when a
+                    // counter type is not implemented by the host renderer.
+                    resultHandler(null, 0);
+                    break;
             }
 
             _channel.MemoryManager.CounterCache.AddOrUpdate(gpuVa, counter);
