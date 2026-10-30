@@ -11,7 +11,7 @@ enum RamDonor {
     private static let mib: UInt64 = 1024 * 1024
     
     static var isEnabled: Bool {
-        get { NativeSettingsManager.shared.setting(forKey: "donateGuestMemory", default: true).value }
+        get { NativeSettingsManager.shared.setting(forKey: "donateGuestMemory", default: false).value }
         set { NativeSettingsManager.shared.setting(forKey: "donateGuestMemory", default: true).value = newValue }
     }
     
