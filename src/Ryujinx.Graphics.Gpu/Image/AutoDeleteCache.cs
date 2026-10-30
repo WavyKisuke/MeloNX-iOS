@@ -37,6 +37,9 @@ namespace Ryujinx.Graphics.Gpu.Image
         private const int MaxCapacity = 2048;
         private const ulong MiB = 1024 * 1024;
         private const ulong GiB = 1024 * 1024 * 1024;
+        private const ulong ProcessConstrainedMemoryThreshold = 8UL * GiB;
+        private const ulong MaxProcessTextureSizeCapacity = 2UL * GiB;
+        private const double ProcessMemoryScaleFactor = 0.30d;
         private ulong MaxTextureSizeCapacity = 4UL * GiB;
         private const ulong MinTextureSizeCapacity = 512 * 1024 * 1024;
         private const ulong DefaultTextureSizeCapacity = 1 * GiB;
@@ -107,6 +110,15 @@ namespace Ryujinx.Graphics.Gpu.Image
 
             ulong cacheMemory = (ulong)(context.Capabilities.MaximumGpuMemory * MemoryScaleFactor);
             _maxCacheMemoryUsage = Math.Clamp(cacheMemory, MinTextureSizeCapacity, MaxTextureSizeCapacity);
+
+            long totalAvailableMemory = GC.GetGCMemoryInfo().TotalAvailableMemoryBytes;
+
+            if (totalAvailableMemory > 0 && (ulong)totalAvailableMemory <= ProcessConstrainedMemoryThreshold)
+            {
+                ulong processBudget = (ulong)(totalAvailableMemory * ProcessMemoryScaleFactor);
+                processBudget = Math.Clamp(processBudget, MinTextureSizeCapacity, MaxProcessTextureSizeCapacity);
+                _maxCacheMemoryUsage = Math.Min(_maxCacheMemoryUsage, processBudget);
+            }
 
             Logger.Info?.Print(LogClass.Gpu, $"AutoDelete cache memory limit: {_maxCacheMemoryUsage / MiB} MiB");
         }
