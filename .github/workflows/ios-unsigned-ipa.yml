@@ -172,3 +172,5 @@ jobs:
             ${{ env.IPA_OUTPUT_DIR }}/MeloNX.ipa
             ${{ env.IPA_OUTPUT_DIR }}/MeloNX-signing-entitlements.plist
           if-no-files-found: error
+
+# Build trigger probe: this workflow change intentionally creates a fresh push event.
