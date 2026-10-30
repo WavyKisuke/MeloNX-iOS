@@ -237,9 +237,20 @@ namespace Ryujinx.Graphics.Gpu.Image
                 {
                     return entry.Texture;
                 }
-                else
+
+                // The entry is stale. Drop the lookup and its cache ownership now
+                // instead of retaining the texture until the next short-cache tick.
+                _shortCacheLookup.Remove(descriptor);
+
+                if (entry.Texture.ShortCacheEntry == entry)
                 {
-                    _shortCacheLookup.Remove(descriptor);
+                    bool removed = _shortCache.Remove(entry) || _shortCacheBuilder.Remove(entry);
+
+                    if (removed)
+                    {
+                        entry.Texture.DecrementReferenceCount();
+                        entry.Texture.ShortCacheEntry = null;
+                    }
                 }
             }
 
