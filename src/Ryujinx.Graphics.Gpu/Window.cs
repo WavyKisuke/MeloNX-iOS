@@ -23,51 +23,14 @@ namespace Ryujinx.Graphics.Gpu
         /// </summary>
         private readonly struct PresentationTexture
         {
-            /// <summary>
-            /// Texture cache where the texture might be located.
-            /// </summary>
             public TextureCache Cache { get; }
-
-            /// <summary>
-            /// Texture information.
-            /// </summary>
             public TextureInfo Info { get; }
-
-            /// <summary>
-            /// Physical memory locations where the texture data is located.
-            /// </summary>
             public MultiRange Range { get; }
-
-            /// <summary>
-            /// Texture crop region.
-            /// </summary>
             public ImageCrop Crop { get; }
-
-            /// <summary>
-            /// Texture acquire callback.
-            /// </summary>
             public Action<GpuContext, object> AcquireCallback { get; }
-
-            /// <summary>
-            /// Texture release callback.
-            /// </summary>
             public Action<object> ReleaseCallback { get; }
-
-            /// <summary>
-            /// User defined object, passed to the various callbacks.
-            /// </summary>
             public object UserObj { get; }
 
-            /// <summary>
-            /// Creates a new instance of the presentation texture.
-            /// </summary>
-            /// <param name="cache">Texture cache used to look for the texture to be presented</param>
-            /// <param name="info">Information of the texture to be presented</param>
-            /// <param name="range">Physical memory locations where the texture data is located</param>
-            /// <param name="crop">Texture crop region</param>
-            /// <param name="acquireCallback">Texture acquire callback</param>
-            /// <param name="releaseCallback">Texture release callback</param>
-            /// <param name="userObj">User defined object passed to the release callback, can be used to identify the texture</param>
             public PresentationTexture(
                 TextureCache cache,
                 TextureInfo info,
@@ -97,40 +60,14 @@ namespace Ryujinx.Graphics.Gpu
 
         public bool IsFrameAvailable => _framesAvailable != 0;
 
-        /// <summary>
-        /// Creates a new instance of the GPU presentation window.
-        /// </summary>
-        /// <param name="context">GPU emulation context</param>
         public Window(GpuContext context)
         {
             _context = context;
-
             _frameQueue = new ConcurrentQueue<PresentationTexture>();
             _unboundedPresentTimer = Stopwatch.StartNew();
             SetUnboundedPresentTargetFps(DefaultUnboundedPresentTargetFps);
         }
 
-        /// <summary>
-        /// Enqueues a frame for presentation.
-        /// This method is thread safe and can be called from any thread.
-        /// When the texture is presented and not needed anymore, the release callback is called.
-        /// It's an error to modify the texture after calling this method, before the release callback is called.
-        /// </summary>
-        /// <param name="pid">Process ID of the process that owns the texture pointed to by <paramref name="address"/></param>
-        /// <param name="address">CPU virtual address of the texture data</param>
-        /// <param name="width">Texture width</param>
-        /// <param name="height">Texture height</param>
-        /// <param name="stride">Texture stride for linear texture, should be zero otherwise</param>
-        /// <param name="isLinear">Indicates if the texture is linear, normally false</param>
-        /// <param name="gobBlocksInY">GOB blocks in the Y direction, for block linear textures</param>
-        /// <param name="format">Texture format</param>
-        /// <param name="bytesPerPixel">Texture format bytes per pixel (must match the format)</param>
-        /// <param name="crop">Texture crop region</param>
-        /// <param name="acquireCallback">Texture acquire callback</param>
-        /// <param name="releaseCallback">Texture release callback</param>
-        /// <param name="userObj">User defined object passed to the release callback</param>
-        /// <exception cref="ArgumentException">Thrown when <paramref name="pid"/> is invalid</exception>
-        /// <returns>True if the frame was added to the queue, false otherwise</returns>
         public bool EnqueueFrameThreadSafe(
             ulong pid,
             ulong address,
@@ -196,11 +133,6 @@ namespace Ryujinx.Graphics.Gpu
             return true;
         }
 
-        /// <summary>
-        /// Presents a texture on the queue.
-        /// If the queue is empty, then no texture is presented.
-        /// </summary>
-        /// <param name="swapBuffersCallback">Callback method to call when a new texture should be presented on the screen</param>
         public void Present(Action swapBuffersCallback)
         {
             _context.AdvanceSequence();
@@ -208,11 +140,8 @@ namespace Ryujinx.Graphics.Gpu
             if (_frameQueue.TryDequeue(out PresentationTexture pt))
             {
                 pt.AcquireCallback(_context, pt.UserObj);
-
                 Image.Texture texture = pt.Cache.FindOrCreateTexture(null, TextureSearchFlags.WithUpscale, pt.Info, 0, range: pt.Range);
-
                 pt.Cache.Tick();
-
                 texture.SynchronizeMemory();
 
                 ImageCrop crop = new(
@@ -247,20 +176,10 @@ namespace Ryujinx.Graphics.Gpu
                 }
 
                 _context.Renderer.Window.Present(texture.HostTexture, crop, swapBuffersCallback);
-
                 pt.ReleaseCallback(pt.UserObj);
             }
         }
 
-        /// <summary>
-        /// Presents all available ready frames, optionally capping unbounded present mode.
-        /// </summary>
-        /// <remarks>
-        /// This method always consumes frames through <see cref="ConsumeFrameAvailable"/> before dequeuing,
-        /// preserving the guest GPU fence readiness gate.
-        /// </remarks>
-        /// <param name="swapBuffersCallback">Callback method to call when a new texture should be presented on the screen</param>
-        /// <returns>True if a frame was presented, false otherwise</returns>
         public bool PresentLoop(Action swapBuffersCallback)
         {
             bool presented = false;
@@ -298,10 +217,6 @@ namespace Ryujinx.Graphics.Gpu
             return presented;
         }
 
-        /// <summary>
-        /// Sets whether the host present loop should cap and drop surplus ready frames.
-        /// </summary>
-        /// <param name="enabled">True when the guest compositor is running with swap interval 0</param>
         public void SetUnboundedPresentMode(bool enabled)
         {
             if (_unboundedPresentMode != enabled)
@@ -311,14 +226,9 @@ namespace Ryujinx.Graphics.Gpu
             }
         }
 
-        /// <summary>
-        /// Sets the FPS target used when unbounded present mode is capped by the host.
-        /// </summary>
-        /// <param name="targetFps">Host display refresh rate in frames per second</param>
         public void SetUnboundedPresentTargetFps(int targetFps)
         {
             targetFps = Math.Max(1, targetFps);
-
             Interlocked.Exchange(ref _unboundedPresentTicksPerFrame, Math.Max(1, Stopwatch.Frequency / targetFps));
             Interlocked.Exchange(ref _lastUnboundedPresentTicks, 0);
         }
@@ -331,28 +241,27 @@ namespace Ryujinx.Graphics.Gpu
             }
         }
 
-        /// <summary>
-        /// Indicate that a frame on the queue is ready to be acquired.
-        /// </summary>
         public void SignalFrameReady()
         {
             Interlocked.Increment(ref _framesAvailable);
         }
 
-        /// <summary>
-        /// Determine if any frames are available, and decrement the available count if there are.
-        /// </summary>
-        /// <returns>True if a frame is available, false otherwise</returns>
         public bool ConsumeFrameAvailable()
         {
-            if (Interlocked.CompareExchange(ref _framesAvailable, 0, 0) != 0)
+            while (true)
             {
-                Interlocked.Decrement(ref _framesAvailable);
+                int available = Volatile.Read(ref _framesAvailable);
 
-                return true;
+                if (available <= 0)
+                {
+                    return false;
+                }
+
+                if (Interlocked.CompareExchange(ref _framesAvailable, available - 1, available) == available)
+                {
+                    return true;
+                }
             }
-
-            return false;
         }
     }
 }
