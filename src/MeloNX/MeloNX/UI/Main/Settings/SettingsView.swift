@@ -880,8 +880,8 @@ struct SettingsView: View {
                                 info: "Ignores unimplemented Horizon OS services. May help bypass crashes on certain games. Leave OFF if unsure.")
                 
                 NativeToggleRow("Donate Guest RAM", icon: "externaldrive.connected.to.line.below",
-                                isOn: nativeSettingsManager.donateGuestMemory(true).projectedValue,
-                                info: "Holds guest RAM in helper processes so it counts against their memory limits instead of MeloNX's. Experimental: the helpers can be killed under memory pressure, which ends the game. Leave ON if unsure.")
+                                isOn: nativeSettingsManager.donateGuestMemory(false).projectedValue,
+                                info: "Off by default for frame-rate stability. Moves guest RAM into helper processes and is experimental; it can add memory-management overhead. Enable only for games that need it.")
                 .disabled(!RamDonor.isSupported)
                 
                 NativeToggleRow("Donate GPU Buffers", icon: "memorychip",
@@ -892,7 +892,7 @@ struct SettingsView: View {
                 NativeToggleRow("Kill Helpers After Mapping", icon: "xmark.octagon",
                                 isOn: nativeSettingsManager.killDonorsAfterMapping(true).projectedValue,
                                 info: "kills the memory helpers as soon as their memory has been mapped, then keeps running on it. Leave ON if unsure.")
-                .disabled(!RamDonor.isSupported || !(nativeSettingsManager.donateGuestMemory(true).value || nativeSettingsManager.donateGpuBuffers(true).value))
+                .disabled(!RamDonor.isSupported || !(nativeSettingsManager.donateGuestMemory(false).value || nativeSettingsManager.donateGpuBuffers(true).value))
             } header: {
                 Text("Memory")
             } footer: {
