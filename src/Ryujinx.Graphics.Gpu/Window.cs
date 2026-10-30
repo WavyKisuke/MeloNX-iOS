@@ -142,7 +142,6 @@ namespace Ryujinx.Graphics.Gpu
                 pt.AcquireCallback(_context, pt.UserObj);
                 Image.Texture texture = pt.Cache.FindOrCreateTexture(null, TextureSearchFlags.WithUpscale, pt.Info, 0, range: pt.Range);
                 pt.Cache.Tick();
-                texture.SynchronizeMemory();
 
                 ImageCrop crop = new(
                     (int)(pt.Crop.Left * texture.ScaleFactor),
