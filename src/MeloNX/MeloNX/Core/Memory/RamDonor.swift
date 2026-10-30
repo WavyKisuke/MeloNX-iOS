@@ -10,9 +10,11 @@ import Foundation
 enum RamDonor {
     private static let mib: UInt64 = 1024 * 1024
     
+    // Donated memory is experimental. Keep the normal-memory path as the default
+    // so frame pacing is not dependent on helper-process memory behavior.
     static var isEnabled: Bool {
         get { NativeSettingsManager.shared.setting(forKey: "donateGuestMemory", default: false).value }
-        set { NativeSettingsManager.shared.setting(forKey: "donateGuestMemory", default: true).value = newValue }
+        set { NativeSettingsManager.shared.setting(forKey: "donateGuestMemory", default: false).value = newValue }
     }
     
     static var gpuBuffersEnabled: Bool {
@@ -70,7 +72,6 @@ enum RamDonor {
         
         mlx_ram_donor_set_kill_after_mapping(killDonorsAfterMapping)
         
-        
         var granted: UInt64 = 0
         let minimum = min(requested, 256 * mib)
         
@@ -80,7 +81,6 @@ enum RamDonor {
             mlx_ram_donor_shutdown()
             return fail("Could not source donor memory: \(reason)")
         }
-        
         
         let guestBytes = min(granted, requestedGuest)
         let gpuBytes = granted - guestBytes
@@ -114,7 +114,6 @@ enum RamDonor {
     static func teardown() {
         guard region != nil else { return }
         
-        
         guard withdraw_donated_gpu_memory() != 0 else {
             lastStatus = "Keeping donor memory alive: GPU buffers are still in use"
             print(lastStatus)
@@ -132,7 +131,6 @@ enum RamDonor {
         region = nil
         regionSize = 0
     }
-    
     
     static var isSupported: Bool {
         mlx_ram_donor_is_available()
